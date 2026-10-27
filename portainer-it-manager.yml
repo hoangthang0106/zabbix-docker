@@ -3,6 +3,12 @@
 # Deploy this file from Portainer > Stacks > Add stack > Repository.
 # Set ZABBIX_DB_PASSWORD in Portainer Stack environment variables (never commit secrets).
 # No 'privileged', no host PID/socket mounts, no default 80/443 or 172.16.x Docker subnets.
+# IP inventory from earlier IT-MANAGER discussions (not a live network scan):
+# 10.10.10.0/24 management; 192.168.20.0/24 cameras;
+# 172.16.1.0/24 UniFi; 172.16.100.0/23 guest; 172.16.200.0/23 staff.
+# Run: sudo bash scripts/check-it-network.sh BEFORE deploying to detect live conflicts.
+# Web defaults to loopback (127.0.0.1), NOT all interfaces, to protect first login.
+# SSH tunnel for onboarding: ssh -L 8380:127.0.0.1:8380 USER@UBUNTU_IP
 
 services:
   zabbix-db:
@@ -56,6 +62,7 @@ services:
       ZBX_CACHESIZE: "64M"
       ZBX_VALUECACHESIZE: "32M"
       ZBX_ENABLE_SNMP_TRAPS: "false"
+      ZBX_ENABLEGLOBALSCRIPTS: "0"
     depends_on:
       zabbix-db-init:
         condition: service_completed_successfully
@@ -80,7 +87,7 @@ services:
       ZBX_SERVER_NAME: IT-MANAGER Zabbix
       PHP_TZ: Asia/Ho_Chi_Minh
     ports:
-      - "${IT_ZABBIX_BIND_IP:-0.0.0.0}:${IT_ZABBIX_WEB_PORT:-8380}:8080/tcp"
+      - "${IT_ZABBIX_BIND_IP:-127.0.0.1}:${IT_ZABBIX_WEB_PORT:-8380}:8080/tcp"
     depends_on:
       zabbix-db-init:
         condition: service_completed_successfully
@@ -91,8 +98,9 @@ services:
       - monitoring
 
 networks:
-  # Fixed non-172.16 ranges to avoid likely camera/other VLAN overlap.
-  # Change through Portainer variables if these overlap your actual routing table.
+  # Candidate Docker-only subnets chosen outside the networks documented so far.
+  # NOT VERIFIED FREE on the live Ubuntu host; run scripts/check-it-network.sh.
+  # Adjust via Portainer variables if any overlap the actual routing table.
   monitoring:
     driver: bridge
     ipam:
