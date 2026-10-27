@@ -113,8 +113,8 @@ if ver.returncode:
     errors.append("Cannot determine Docker Engine server version")
 else:
     version_text = ver.stdout.strip()
-    print(f"\\nDocker Engine server version: {version_text}")
-    match = re.match(r"^(\\d+)\\.", version_text)
+    print(f"\nDocker Engine server version: {version_text}")
+    match = re.match(r"^(\d+)\.", version_text)
     if not match:
         errors.append(f"Unrecognized Docker Engine version: {version_text}")
     elif int(match.group(1)) < 28:
