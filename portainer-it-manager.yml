@@ -1,0 +1,111 @@
+# IT-MANAGER | Standalone Zabbix 7.4 stack for Portainer
+# Source: official zabbix/zabbix-docker fork.
+# Deploy this file from Portainer > Stacks > Add stack > Repository.
+# Set ZABBIX_DB_PASSWORD in Portainer Stack environment variables (never commit secrets).
+# No 'privileged', no host PID/socket mounts, no default 80/443 or 172.16.x Docker subnets.
+
+services:
+  zabbix-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:?Set ZABBIX_DB_PASSWORD in Portainer Stack variables}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - zabbix_postgres_data:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - database
+
+  zabbix-db-init:
+    image: zabbix/zabbix-server-pgsql:${IT_ZABBIX_IMAGE_TAG:-alpine-7.4-latest}
+    command: ["init_db_only"]
+    restart: "no"
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:?Set ZABBIX_DB_PASSWORD in Portainer Stack variables}
+    depends_on:
+      zabbix-db:
+        condition: service_healthy
+    networks:
+      - database
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:${IT_ZABBIX_IMAGE_TAG:-alpine-7.4-latest}
+    init: true
+    restart: unless-stopped
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:?Set ZABBIX_DB_PASSWORD in Portainer Stack variables}
+      ZBX_STARTSNMPPOLLERS: "2"
+      ZBX_STARTPOLLERS: "5"
+      ZBX_STARTDISCOVERERS: "2"
+      ZBX_STARTPINGERS: "1"
+      ZBX_CACHESIZE: "64M"
+      ZBX_VALUECACHESIZE: "32M"
+      ZBX_ENABLE_SNMP_TRAPS: "false"
+    depends_on:
+      zabbix-db-init:
+        condition: service_completed_successfully
+      zabbix-db:
+        condition: service_healthy
+    volumes:
+      - zabbix_externalscripts:/usr/lib/zabbix/externalscripts
+      - zabbix_alertscripts:/usr/lib/zabbix/alertscripts
+    networks:
+      - database
+      - monitoring
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:${IT_ZABBIX_IMAGE_TAG:-alpine-7.4-latest}
+    restart: unless-stopped
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:?Set ZABBIX_DB_PASSWORD in Portainer Stack variables}
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_NAME: IT-MANAGER Zabbix
+      PHP_TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "${IT_ZABBIX_BIND_IP:-0.0.0.0}:${IT_ZABBIX_WEB_PORT:-8380}:8080/tcp"
+    depends_on:
+      zabbix-db-init:
+        condition: service_completed_successfully
+      zabbix-server:
+        condition: service_started
+    networks:
+      - database
+      - monitoring
+
+networks:
+  # Fixed non-172.16 ranges to avoid likely camera/other VLAN overlap.
+  # Change through Portainer variables if these overlap your actual routing table.
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${IT_ZABBIX_MONITOR_SUBNET:-10.253.74.0/24}
+  database:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${IT_ZABBIX_DB_SUBNET:-10.253.75.0/24}
+
+volumes:
+  zabbix_postgres_data:
+  zabbix_externalscripts:
+  zabbix_alertscripts:
