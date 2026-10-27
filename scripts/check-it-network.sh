@@ -11,14 +11,40 @@ import socket
 import subprocess
 import sys
 
+LAN = ipaddress.ip_network("192.168.20.0/24")
 KNOWN = {
-    "MikroTik/management": "10.10.10.0/24",
-    "Camera VLAN 20": "192.168.20.0/24",
-    "UniFi management": "172.16.1.0/24",
-    "Guest VLAN 13": "172.16.100.0/23",
-    "Staff VLAN 12": "172.16.200.0/23",
-    "Historical/example only, not confirmed": "192.168.10.0/24",
+    "Local camera / server LAN": "192.168.20.0/24",
 }
+# Historical record only, not live discovery or reservation.
+RECORDED = {
+    1: "MikroTik camera LAN gateway",
+    42: "PoE switch G",
+    43: "PoE switch T9",
+    54: "PoE switch T5",
+    55: "PoE switch T6",
+    58: "PoE switch T8",
+    69: "Recorded on both NVR01 and NVR02 lists; verify actual MAC",
+    150: "Elevator device (historical)",
+    151: "Elevator device (historical)",
+    152: "Elevator device (historical)",
+    153: "Elevator device (historical)",
+    154: "Elevator device (historical)",
+    155: "Elevator device (historical)",
+    194: "Ubuntu desired reservation, previously Waiting — NOT confirmed assigned",
+    200: "FaceID",
+    201: "FaceID",
+    202: "Door/access device",
+    206: "Last reported Ubuntu/Portainer IP — check live",
+    212: "Camera",
+    213: "Camera",
+    214: "Camera",
+    215: "Camera",
+    248: "Proxmox (confirmed screenshot in earlier chat)",
+    252: "PoE switch T11",
+    253: "NVR/other equipment previously reported — verify",
+    254: "PoE switch T7 (corrected from NVR)",
+}
+
 DEFAULTS = {
     "IT_ZABBIX_MONITOR_SUBNET": "10.253.74.0/24",
     "IT_ZABBIX_DB_SUBNET": "10.253.75.0/24",
@@ -50,10 +76,10 @@ def parse_json_command(args, label):
         errors.append(f"{label}: invalid JSON ({exc})")
         return None
 
-print("ZABBIX / IT-MANAGER — READ-ONLY IP, NETWORK & PORT PRE-FLIGHT")
-print("Known from prior history (not live verification):")
-for label, cidr in KNOWN.items():
-    print(f"  {label:44s} {cidr}")
+print("ZABBIX / IT-MANAGER — 192.168.20.x DEVICE INVENTORY & SAFE DOCKER PRE-FLIGHT")
+print("Only relevant device LAN: 192.168.20.0/24. Historical addresses (NOT scanned):")
+for octet, label in sorted(RECORDED.items()):
+    print(f"  192.168.20.{octet:<3} {label}")
 
 monitor = parse_network(settings["IT_ZABBIX_MONITOR_SUBNET"], "monitor")
 db = parse_network(settings["IT_ZABBIX_DB_SUBNET"], "database")
@@ -89,6 +115,22 @@ if host_addrs is not None:
                     for label, cand in candidates:
                         if cand.overlaps(net):
                             errors.append(f"{label} {cand} overlaps interface {iface.get('ifname')} ({net})")
+
+# Read-only neighbor table, not an ARP sweep; an absent entry does NOT mean a free IP.
+neighbors = parse_json_command(["ip", "-j", "-4", "neigh", "show"], "LAN neighbor table")
+if neighbors is not None:
+    print("\\nCached neighbor entries in 192.168.20.0/24 (not a full scan):")
+    for entry in neighbors:
+        addr = entry.get("dst", "")
+        try:
+            candidate = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if candidate in LAN:
+            mac = entry.get("lladdr", "-")
+            state = ",".join(entry.get("state", [])) if isinstance(entry.get("state", []), list) else str(entry.get("state", ""))
+            print(f"  {addr:16s} MAC={mac:17s} interface={entry.get('dev', '-')}; state={state}")
+print("NOTE: For authoritative current occupancy, compare MikroTik DHCP leases, ARP, static-IP inventory.")
 
 routes = parse_json_command(["ip", "-j", "-4", "route", "show", "table", "all"], "IPv4 route table")
 if routes is not None:
