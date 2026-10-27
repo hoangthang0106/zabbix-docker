@@ -3,9 +3,11 @@
 # Deploy this file from Portainer > Stacks > Add stack > Repository.
 # Set ZABBIX_DB_PASSWORD in Portainer Stack environment variables (never commit secrets).
 # No 'privileged', no host PID/socket mounts, no default 80/443 or 172.16.x Docker subnets.
-# IP inventory from earlier IT-MANAGER discussions (not a live network scan):
-# 10.10.10.0/24 management; 192.168.20.0/24 cameras;
-# 172.16.1.0/24 UniFi; 172.16.100.0/23 guest; 172.16.200.0/23 staff.
+# Scope of historical device IP inventory: 192.168.20.0/24 ONLY.
+# Host last reported 192.168.20.206; .194 is desired but DHCP was still Waiting.
+# This Stack does NOT assign any 192.168.20.x IP to a container or alter DHCP.
+# Docker bridge 10.253.x IPs are isolated routing ranges, not additional LAN addresses.
+# See IP-192.168.20.md for the observed device addresses & confidence levels.
 # Run: sudo bash scripts/check-it-network.sh BEFORE deploying to detect live conflicts.
 # Web defaults to loopback (127.0.0.1), NOT all interfaces, to protect first login.
 # SSH tunnel for onboarding: ssh -L 8380:127.0.0.1:8380 USER@UBUNTU_IP
