@@ -28,11 +28,11 @@ On the Ubuntu host (not inside Portainer):
 
 ```bash
 curl -fsSLo /tmp/check-it-network.sh \
-  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/19100df55f939fe0a76d0da8cd581c822261f1b8/scripts/check-it-network.sh
+  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/fc9e8c336c685d85322c15f7ccdcc5960a29865e/scripts/check-it-network.sh
 sudo bash /tmp/check-it-network.sh
 ```
 
-The download is pinned to the specific reviewed Git commit `19100df` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
+The download is pinned to the specific reviewed Git commit `fc9e8c3` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
 - IPv4 IPs assigned to the Ubuntu host (so you can see whether `.194` or `.206` is currently active)
 - Current Linux route table
 - Existing Docker networks/subnets
