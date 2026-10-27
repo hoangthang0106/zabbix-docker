@@ -4,13 +4,15 @@
 # Set ZABBIX_DB_PASSWORD in Portainer Stack environment variables (never commit secrets).
 # No 'privileged', no host PID/socket mounts, no default 80/443 or 172.16.x Docker subnets.
 # Scope of historical device IP inventory: 192.168.20.0/24 ONLY.
-# Host last reported 192.168.20.206; .194 is desired but DHCP was still Waiting.
+# Ubuntu/Portainer LAN IP: 192.168.20.194 (user's latest explicit correction).
+# This Docker stack cannot change the actual Ubuntu host address.
 # This Stack does NOT assign any 192.168.20.x IP to a container or alter DHCP.
 # Docker bridge 10.253.x IPs are isolated routing ranges, not additional LAN addresses.
 # See IP-192.168.20.md for the observed device addresses & confidence levels.
 # Run: sudo bash scripts/check-it-network.sh BEFORE deploying to detect live conflicts.
-# Web defaults to loopback (127.0.0.1), NOT all interfaces, to protect first login.
-# SSH tunnel for onboarding: ssh -L 8380:127.0.0.1:8380 USER@UBUNTU_IP
+# Web binds ONLY to 192.168.20.194:8380 (never all 0.0.0.0 interfaces).
+# NOTE: Host must own 192.168.20.194 or Docker cannot bind. LAN HTTP is not encrypted.
+# Block Internet/NAT access; limit 8380/TCP to trusted administration clients and change Zabbix Admin password.
 
 services:
   zabbix-db:
@@ -89,7 +91,7 @@ services:
       ZBX_SERVER_NAME: IT-MANAGER Zabbix
       PHP_TZ: Asia/Ho_Chi_Minh
     ports:
-      - "${IT_ZABBIX_BIND_IP:-127.0.0.1}:${IT_ZABBIX_WEB_PORT:-8380}:8080/tcp"
+      - "${IT_ZABBIX_BIND_IP:-192.168.20.194}:${IT_ZABBIX_WEB_PORT:-8380}:8080/tcp"
     depends_on:
       zabbix-db-init:
         condition: service_completed_successfully
