@@ -106,6 +106,20 @@ if routes is not None:
             if net.overlaps(cand):
                 errors.append(f"{label} {cand} overlaps existing host route {net} via {via}")
 
+# Docker Engine releases older than 28.0.0 may expose localhost-published
+# container ports to peers on the same L2 segment (Docker's documented warning).
+ver = run(["docker", "version", "--format", "{{.Server.Version}}"])
+if ver.returncode:
+    errors.append("Cannot determine Docker Engine server version")
+else:
+    version_text = ver.stdout.strip()
+    print(f"\\nDocker Engine server version: {version_text}")
+    match = re.match(r"^(\\d+)\\.", version_text)
+    if not match:
+        errors.append(f"Unrecognized Docker Engine version: {version_text}")
+    elif int(match.group(1)) < 28:
+        errors.append("Docker Engine < 28: localhost-published ports may be reachable from same-L2 devices; upgrade Docker before relying on 127.0.0.1 binding")
+
 ids = run(["docker", "network", "ls", "-q"])
 if ids.returncode:
     errors.append("docker network list unavailable: run this script with sudo on Docker host")
