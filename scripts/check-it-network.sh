@@ -49,7 +49,7 @@ DEFAULTS = {
     "IT_ZABBIX_MONITOR_SUBNET": "10.253.74.0/24",
     "IT_ZABBIX_DB_SUBNET": "10.253.75.0/24",
     "IT_ZABBIX_WEB_PORT": "8380",
-    "IT_ZABBIX_BIND_IP": "127.0.0.1",
+    "IT_ZABBIX_BIND_IP": "192.168.20.194",
 }
 settings = {k: os.environ.get(k, default) for k, default in DEFAULTS.items()}
 errors = []
