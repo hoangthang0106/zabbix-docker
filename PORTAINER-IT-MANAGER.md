@@ -1,22 +1,12 @@
 # IT-MANAGER — Zabbix 7.4: verified scope, VLANs, IP collision checks and security
 
-## 1. Important: history is NOT live network discovery
+## 1. Phạm vi chỉ LAN `192.168.20.0/24`
 
-This list was reconstructed from the IT-MANAGER network topology and chat history. **No remote scan of the user's live MikroTik, Proxmox or Ubuntu has been performed.**
+Đọc [danh sách IP `192.168.20.x`](IP-192.168.20.md) đã lọc từ lịch sử. Tài liệu gồm IP gateway `.1`, switch PoE `.42/.43/.54/.55/.58/.252/.254`, camera và FaceID, Proxmox `.248`, Ubuntu gần nhất `.206`; IP `.194` là DHCP reservation anh muốn khôi phục nhưng lần cuối còn trạng thái `Waiting`. **Không coi `.194` là IP đang rảnh.**
 
-| Network / item | Historical observation | Confidence |
-| --- | --- | --- |
-| VLAN 1, management | `10.10.10.0/24`; MikroTik/gateway `10.10.10.1`; Cisco core C1300 `10.10.10.2` | Network topology |
-| VLAN 20, cameras | `192.168.20.0/24`; gateway `192.168.20.1` | Network topology |
-| VLAN 12, staff | `172.16.200.0/23`; gateway `172.16.200.1` | Network topology |
-| VLAN 13, guest | `172.16.100.0/23`; gateway `172.16.100.1` | Network topology |
-| UniFi UCK G2 Plus | `172.16.1.248` via `172.16.1.1`, subnet `172.16.1.0/24` | Network topology |
-| Ubuntu/Portainer | Initially `192.168.20.194`, later reported as `192.168.20.206`; user wants to restore `.194` | **Latest user-reported .206; not verified live today** |
-| `192.168.10.0/24` | Examples in prior discussions; not established as active network | **Unverified** |
-| Docker bridge networks | 172.x addresses observed by user; actual Docker subnets not provided | **Unknown** |
-| LibreNMS host HTTP port | 8000 appeared in example/compose; not confirmed real host port | **Unknown** |
+**Không quét live được MikroTik/Ubuntu từ GitHub.** Tuyệt đối không tự đặt thêm IP LAN `192.168.20.x` cho container, sửa DHCP, NAT hay đổi IP Ubuntu khi chưa có chứng cứ.
 
-**Do not force DHCP reservation or static IP `192.168.20.194` through this Docker stack.** Configure the Ubuntu host's lease/reservation on MikroTik separately, after checking active leases, ARP and DHCP. Do not assume `.194` is free.
+Docker networks `10.253.74.0/24` và `10.253.75.0/24` là **bridge riêng bên trong Docker**, không phải VLAN/IP vật lý khác trong LAN `192.168.20.0/24`. Không gán bridge Docker vào `192.168.20.0/24` vì trùng subnet của Ubuntu.
 
 ## 2. How the custom Portainer stack avoids known overlap
 
@@ -38,17 +28,18 @@ On the Ubuntu host (not inside Portainer):
 
 ```bash
 curl -fsSLo /tmp/check-it-network.sh \
-  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/3dbcbfdadbab951df0da6458eb1e40697e190ff0/scripts/check-it-network.sh
+  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/c81f04ff124712558c3e4585bbd9abf0d5e30b79/scripts/check-it-network.sh
 sudo bash /tmp/check-it-network.sh
 ```
 
-The download is pinned to the specific reviewed Git commit `3dbcbfd` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
+The download is pinned to the specific reviewed Git commit `c81f04f` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
 - IPv4 IPs assigned to the Ubuntu host (so you can see whether `.194` or `.206` is currently active)
 - Current Linux route table
 - Existing Docker networks/subnets
 - Docker published host ports
-- Collision checks against the candidate Docker networks and known historical VLANs
+- Collision checks against Docker bridge candidates, active host routes/interfaces and `192.168.20.0/24` only as the historically relevant LAN
 - Host port bind test for `127.0.0.1:8380`
+- Read-only cached neighbor entries in `192.168.20.0/24` (not a live sweep; absence doesn't mean unused)
 - Docker Engine version check: older than 28 is blocked because Docker documents an L2 exposure affecting localhost-published container ports
 
 **If it prints FAIL, do not deploy.** Set unused subnets using the same two variables BOTH when running the script and in Portainer. Example:
@@ -96,11 +87,11 @@ For LAN access, set e.g. `IT_ZABBIX_BIND_IP=192.168.20.206` **only if the host a
 
 ## 5. Firewall, SNMP and management
 
-- Keep the camera VLAN unable to initiate toward staff/management. Monitoring needs a specific **allow rule from Ubuntu/Zabbix to managed hosts** (e.g. UDP/161 and ICMP) before broad camera-to-management deny rules; preserve stateful related/established traffic.
+- On `192.168.20.0/24`, permit monitoring from the Ubuntu source IP to managed hosts only on the required protocols (e.g. UDP/161 and ICMP); do not open general management access from untrusted camera devices. Preserve established/related firewall responses.
 - For SNMP use **SNMPv3 authPriv**, read-only access, and restrict allowed poller source to the actual Ubuntu host. Docker NAT generally presents the Ubuntu source IP for outgoing LAN SNMP polling.
 - No SNMP trap UDP/162 host port, no Zabbix server TCP/10051 host port or PostgreSQL TCP/5432 is published by this stack.
 - Passive Zabbix agents, if added later, allow Zabbix outbound to TCP/10050 on a managed endpoint. Active agents/proxies would require explicitly allowing the server TCP/10051 and setting ACLs. Do not publish 10051 for this minimal setup.
-- MikroTik, C1300, CBS250, UniFi UCK, Proxmox API 8006, Windows: add each host and the matching Zabbix SNMP/API/agent template after successful initial install. This stack does not automatically discover names/models without SNMP/API credentials and allowed routing.
+- MikroTik gateway `.1`, PoE switches `.42/.43/.54/.55/.58/.252/.254`, Proxmox `.248`, and other confirmed devices on `192.168.20.x`: add each host with the matching Zabbix SNMP/API/agent template after successful installation. This stack does not automatically discover names/models without SNMP/API credentials and allowed routing.
 
 ## 6. Security, backup and update checklist
 
