@@ -2,7 +2,7 @@
 
 ## 1. Phạm vi chỉ LAN `192.168.20.0/24`
 
-Đọc [danh sách IP `192.168.20.x`](IP-192.168.20.md) đã lọc từ lịch sử. Tài liệu gồm IP gateway `.1`, switch PoE `.42/.43/.54/.55/.58/.252/.254`, camera và FaceID, Proxmox `.248`, Ubuntu gần nhất `.206`; IP `.194` là DHCP reservation anh muốn khôi phục nhưng lần cuối còn trạng thái `Waiting`. **Không coi `.194` là IP đang rảnh.**
+Đọc [danh sách IP `192.168.20.x`](IP-192.168.20.md) đã lọc từ lịch sử. Tài liệu gồm IP gateway `.1`, switch PoE `.42/.43/.54/.55/.58/.252/.254`, camera và FaceID, Proxmox `.248`, Ubuntu gần nhất `.206`; Anh vừa xác nhận **Ubuntu/Portainer dùng IP `.194`**, còn `.206` là IP trước đây. Kiểm tra IP đã thực sự gán trên Ubuntu trước khi redeploy.
 
 **Không quét live được MikroTik/Ubuntu từ GitHub.** Tuyệt đối không tự đặt thêm IP LAN `192.168.20.x` cho container, sửa DHCP, NAT hay đổi IP Ubuntu khi chưa có chứng cứ.
 
@@ -16,7 +16,7 @@ The custom stack uses:
 - `10.253.74.0/24` (Docker monitoring bridge)
 - `10.253.75.0/24` (Docker *internal* database bridge)
 - Web host TCP `8380`
-- **Web binds to `127.0.0.1` by default**, never `0.0.0.0`
+- **Web binds to `192.168.20.194` by default**, never `0.0.0.0`
 - Zabbix 7.4 official Docker images, PostgreSQL 17; persistent named database volume
 - No Docker socket, `privileged`, host PID, SNMP-trap publishing, extra proxy/Elasticsearch/Selenium or agent container
 
@@ -38,7 +38,7 @@ The download is pinned to the specific reviewed Git commit `19100df` rather than
 - Existing Docker networks/subnets
 - Docker published host ports
 - Collision checks against Docker bridge candidates, active host routes/interfaces and `192.168.20.0/24` only as the historically relevant LAN
-- Host port bind test for `127.0.0.1:8380`
+- Host port bind test for `192.168.20.194:8380`
 - Read-only cached neighbor entries in `192.168.20.0/24` (not a live sweep; absence doesn't mean unused)
 - Docker Engine version check: older than 28 is blocked because Docker documents an L2 exposure affecting localhost-published container ports
 
@@ -64,26 +64,21 @@ Stack environment:
 - Optional `IT_ZABBIX_WEB_PORT=8380`; only change after host conflict check.
 - Optional `IT_ZABBIX_MONITOR_SUBNET=10.253.74.0/24`
 - Optional `IT_ZABBIX_DB_SUBNET=10.253.75.0/24`
-- Optional `IT_ZABBIX_BIND_IP=127.0.0.1` (default and recommended for first setup)
+- Optional `IT_ZABBIX_BIND_IP=192.168.20.194` (default; restrict firewall to trusted admin clients)
 - Optional `IT_ZABBIX_IMAGE_TAG=alpine-7.4-latest`
 
 **Deploy the stack**. The `zabbix-db-init` container exiting successfully is expected; DB/server/web remain running.
 
-### Initial login without putting default Admin credentials on a camera LAN
+### Zabbix LAN address — user's corrected IP
 
-The web UI is intentionally **not reachable via http://192.168.20.206:8380 by default**. Make a local SSH tunnel from the Windows PC that has access to Ubuntu:
+The user's latest explicit correction is **Ubuntu/Portainer `192.168.20.194`**, not historical `.206`.
+After deploying the stack, use **http://192.168.20.194:8380**.
+The Compose file binds the frontend only to `192.168.20.194`, not all host IP addresses.
+**Check first:** `ip -4 addr` on Ubuntu must show `192.168.20.194`; otherwise binding fails. Docker Compose does not modify host IP or MikroTik DHCP.
 
-```powershell
-ssh -L 8380:127.0.0.1:8380 <ubuntu-ssh-user>@192.168.20.206
-```
+Fresh installation login: `Admin` / `zabbix`; change password immediately. Limit LAN access to TCP/8380 from trusted admin clients with firewall/ACL. Never NAT this port to the Internet. Plain HTTP is not encrypted; use a trusted VPN or HTTPS reverse proxy for continued access.
 
-Replace `192.168.20.206` with the **actual live IPv4 shown by preflight**, not the old `.194` by assumption. With the tunnel open, access **http://127.0.0.1:8380** on that Windows PC.
-
-On the *newly initialized* Zabbix database, default login is `Admin` / `zabbix`. Immediately change that password, configure roles/MFA if supported, set strong admin practices, and do not NAT any Zabbix management ports to the public Internet.
-
-### LAN/VPN access only after hardening
-
-For LAN access, set e.g. `IT_ZABBIX_BIND_IP=192.168.20.206` **only if the host actually owns that address**, then redeploy *after* configuring firewall/ACL and preferably an HTTPS reverse proxy. LAN exposure on camera VLAN 20 is **less desirable** than moving the Ubuntu host to a server/management VLAN or serving the UI only over VPN/HTTPS. Binding to one address is NOT the same as access control; devices within that VLAN could still reach it.
+If the Stack has an existing `IT_ZABBIX_BIND_IP` environment override, **set it to `192.168.20.194` or remove it**, then Pull and redeploy in Portainer. Existing env overrides always take precedence over Compose defaults.
 
 ## 5. Firewall, SNMP and management
 
@@ -98,7 +93,7 @@ For LAN access, set e.g. `IT_ZABBIX_BIND_IP=192.168.20.206` **only if the host a
 - Review the [official Zabbix Docker image tags](https://www.zabbix.com/documentation/7.4/en/manual/installation/containers) before updates. Floating `alpine-7.4-latest` moves on patches; image signatures/dependencies are NOT audited by this repository customization.
 - No published database or external Zabbix ports; internal PostgreSQL Docker network.
 - Docker Engine < 28.0.0: **do not assume localhost-published ports are unreachable from same-L2 peers**. Upgrade Docker or apply separately audited network-level controls before deployment. See [Docker official documentation](https://docs.docker.com/engine/network/port-publishing/).
-- No `privileged`, host PID, `/var/run/docker.sock`, untrusted application scripts, public `0.0.0.0` web binding, or insecure hard-coded application DB password in the custom stack.
+- No `privileged`, host PID, `/var/run/docker.sock`, untrusted application scripts, public `0.0.0.0` web binding (192.168.20.194 access still requires LAN firewall ACL), or insecure hard-coded application DB password in the custom stack.
 - The upstream fork has sample `env_vars/.POSTGRES_PASSWORD` = `zabbix`, but **the new Portainer stack does not use that file**. Never deploy raw upstream example compose with its demo credentials.
 - Zabbix admin is still a default account on first install. Change it before allowing general LAN connectivity.
 - PostgreSQL named volume is persistent, **not an offline backup**. Use tested `pg_dump` backups and copy them to separate HDD/NAS.
