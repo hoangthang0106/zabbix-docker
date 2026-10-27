@@ -38,17 +38,18 @@ On the Ubuntu host (not inside Portainer):
 
 ```bash
 curl -fsSLo /tmp/check-it-network.sh \
-  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/ab2a7b8fbbd64f9c0ecd4b0d7bd0697da6acf856/scripts/check-it-network.sh
+  https://raw.githubusercontent.com/hoangthang0106/zabbix-docker/3dbcbfdadbab951df0da6458eb1e40697e190ff0/scripts/check-it-network.sh
 sudo bash /tmp/check-it-network.sh
 ```
 
-The download is pinned to the specific audited Git commit `ab2a7b8` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
+The download is pinned to the specific reviewed Git commit `3dbcbfd` rather than a moving branch. Review the file before executing if desired. The script is read-only. It prints:
 - IPv4 IPs assigned to the Ubuntu host (so you can see whether `.194` or `.206` is currently active)
 - Current Linux route table
 - Existing Docker networks/subnets
 - Docker published host ports
 - Collision checks against the candidate Docker networks and known historical VLANs
 - Host port bind test for `127.0.0.1:8380`
+- Docker Engine version check: older than 28 is blocked because Docker documents an L2 exposure affecting localhost-published container ports
 
 **If it prints FAIL, do not deploy.** Set unused subnets using the same two variables BOTH when running the script and in Portainer. Example:
 ```bash
@@ -105,6 +106,7 @@ For LAN access, set e.g. `IT_ZABBIX_BIND_IP=192.168.20.206` **only if the host a
 
 - Review the [official Zabbix Docker image tags](https://www.zabbix.com/documentation/7.4/en/manual/installation/containers) before updates. Floating `alpine-7.4-latest` moves on patches; image signatures/dependencies are NOT audited by this repository customization.
 - No published database or external Zabbix ports; internal PostgreSQL Docker network.
+- Docker Engine < 28.0.0: **do not assume localhost-published ports are unreachable from same-L2 peers**. Upgrade Docker or apply separately audited network-level controls before deployment. See [Docker official documentation](https://docs.docker.com/engine/network/port-publishing/).
 - No `privileged`, host PID, `/var/run/docker.sock`, untrusted application scripts, public `0.0.0.0` web binding, or insecure hard-coded application DB password in the custom stack.
 - The upstream fork has sample `env_vars/.POSTGRES_PASSWORD` = `zabbix`, but **the new Portainer stack does not use that file**. Never deploy raw upstream example compose with its demo credentials.
 - Zabbix admin is still a default account on first install. Change it before allowing general LAN connectivity.
