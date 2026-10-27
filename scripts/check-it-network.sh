@@ -119,7 +119,7 @@ if host_addrs is not None:
 # Read-only neighbor table, not an ARP sweep; an absent entry does NOT mean a free IP.
 neighbors = parse_json_command(["ip", "-j", "-4", "neigh", "show"], "LAN neighbor table")
 if neighbors is not None:
-    print("\\nCached neighbor entries in 192.168.20.0/24 (not a full scan):")
+    print("\nCached neighbor entries in 192.168.20.0/24 (not a full scan):")
     for entry in neighbors:
         addr = entry.get("dst", "")
         try:
